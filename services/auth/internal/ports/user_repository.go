@@ -1,7 +1,7 @@
 package ports
 
 import (
-	"Articles/services/auth/internal/domain"
+	"auth/internal/domain"
 	"context"
 )
 
