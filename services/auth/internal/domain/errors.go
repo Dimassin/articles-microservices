@@ -7,7 +7,6 @@ var (
 	ErrInvalidCredentials = errors.New("invalid credentials")
 	ErrUserAlreadyExists  = errors.New("user already exists")
 	ErrWeakPassword       = errors.New("password must be at least 6 characters")
-	ErrInvalidEmail       = errors.New("invalid email format")
 	ErrInternalServer     = errors.New("internal server error")
 	ErrInvalidToken       = errors.New("invalid or expired token")
 )

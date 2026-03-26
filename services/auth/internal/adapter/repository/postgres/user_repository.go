@@ -4,6 +4,7 @@ import (
 	"auth/internal/domain"
 	"context"
 	"database/sql"
+	"errors"
 
 	_ "github.com/lib/pq"
 )
@@ -41,7 +42,7 @@ func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*domain
 	err := r.db.QueryRowContext(ctx, query, email).Scan(
 		&user.ID, &user.Email, &user.Password, &user.Username, &user.CreatedAt, &user.UpdatedAt,
 	)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, domain.ErrUserNotFound
 	}
 	if err != nil {
