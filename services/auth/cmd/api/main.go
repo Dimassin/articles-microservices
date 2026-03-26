@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"log"
+	"net"
 	"net/http"
 	"time"
 
@@ -13,6 +14,11 @@ import (
 	httptransport "auth/internal/adapter/transport/http"
 	"auth/internal/adapter/transport/http/handler"
 	"auth/internal/usecase"
+
+	grpcserver "auth/internal/adapter/transport/grpc" // ваш адаптер
+
+	pb "github.com/Dimassin/articles-microservices/proto/auth"
+	"google.golang.org/grpc" // библиотека gRPC
 )
 
 func main() {
@@ -27,7 +33,7 @@ func main() {
 			SSLMode:  "disable",
 		},
 		JWT: config.JWTConfig{
-			Secret:          "your-secret-key-change-in-production",
+			Secret:          "qwerty",
 			AccessTokenTTL:  "15m",
 			RefreshTokenTTL: "720h",
 		},
@@ -70,6 +76,21 @@ func main() {
 
 	// 6. Создаем usecase
 	authUsecase := usecase.NewAuthUsecase(userRepo, jwtManager, passwordHasher)
+
+	grpcListener, err := net.Listen("tcp", ":50051")
+	if err != nil {
+		log.Fatal("Failed to listen on gRPC port:", err)
+	}
+
+	grpcServer := grpc.NewServer()
+	pb.RegisterAuthServiceServer(grpcServer, grpcserver.NewAuthGrpcServer(authUsecase))
+
+	go func() {
+		log.Println("gRPC server starting on port 50051")
+		if err := grpcServer.Serve(grpcListener); err != nil {
+			log.Fatal("gRPC server failed:", err)
+		}
+	}()
 
 	// 7. Создаем handler и роутер
 	authHandler := handler.NewAuthHandler(authUsecase)

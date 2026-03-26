@@ -23,6 +23,9 @@ func main() {
 			DBName:   "blog",
 			SSLMode:  "disable",
 		},
+		JWT: config.JWTConfig{
+			Secret: "qwey",
+		},
 		Server: config.ServerConfig{
 			Port: "8081",
 		},
@@ -42,8 +45,17 @@ func main() {
 	log.Println("Database connected")
 
 	articleRepo := postgres.NewArticleRepository(db)
-	mockTokenValidator := auth.NewMockTokenValidator()
-	articleUseCase := usecase.NewArticleUsecase(articleRepo, mockTokenValidator)
+	localValidator := auth.NewJWTValidator(cfg.JWT.Secret)
+
+	grpcValidator, err := auth.NewGRPCTokenValidator("localhost:50051")
+	if err != nil {
+		log.Fatal("Failed to create gRPC client:", err)
+	}
+
+	tokenValidator := auth.NewFallbackValidator(localValidator, grpcValidator)
+
+	// Передаем в usecase
+	articleUseCase := usecase.NewArticleUsecase(articleRepo, tokenValidator)
 	articleHandler := handler.NewArticleHandler(articleUseCase)
 	router := bloghttp.SetupRouter(articleHandler)
 
