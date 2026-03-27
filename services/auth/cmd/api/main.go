@@ -1,6 +1,7 @@
 package main
 
 import (
+	"auth/internal/adapter/kafka"
 	"database/sql"
 	"log"
 	"net"
@@ -74,8 +75,14 @@ func main() {
 
 	jwtManager := jwtadapter.NewJWTManager(cfg.JWT.Secret, accessTTL, refreshTTL)
 
+	kafkaProducer := kafka.NewEventProducer(
+		[]string{"localhost:9092"},
+		"user-events",
+	)
+	defer kafkaProducer.Close()
+
 	// 6. Создаем usecase
-	authUsecase := usecase.NewAuthUsecase(userRepo, jwtManager, passwordHasher)
+	authUsecase := usecase.NewAuthUsecase(userRepo, jwtManager, passwordHasher, kafkaProducer)
 
 	grpcListener, err := net.Listen("tcp", ":50051")
 	if err != nil {
