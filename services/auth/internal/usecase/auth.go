@@ -4,23 +4,27 @@ import (
 	"auth/internal/domain"
 	"auth/internal/ports"
 	"context"
+	"log"
 )
 
 type AuthUsecase struct {
-	userRepo ports.UserRepository
-	tokenMgr ports.TokenManager
-	hasher   ports.PasswordHasher
+	userRepo       ports.UserRepository
+	tokenMgr       ports.TokenManager
+	hasher         ports.PasswordHasher
+	eventPublisher ports.EventPublisher
 }
 
 func NewAuthUsecase(
 	userRepo ports.UserRepository,
 	tokenMgr ports.TokenManager,
 	hasher ports.PasswordHasher,
+	eventPublisher ports.EventPublisher,
 ) *AuthUsecase {
 	return &AuthUsecase{
-		userRepo: userRepo,
-		tokenMgr: tokenMgr,
-		hasher:   hasher,
+		userRepo:       userRepo,
+		tokenMgr:       tokenMgr,
+		hasher:         hasher,
+		eventPublisher: eventPublisher,
 	}
 }
 
@@ -48,6 +52,11 @@ func (uc *AuthUsecase) Register(ctx context.Context, req *domain.RegisterRequest
 		Email:    req.Email,
 		Password: hashedPassword,
 		Username: req.Username,
+	}
+
+	if err := uc.eventPublisher.PublishUserCreated(ctx, user.ID, user.Email, user.Username); err != nil {
+		// Логируем ошибку, но не блокируем регистрацию
+		log.Printf("Failed to publish user created event: %v", err)
 	}
 
 	if err := uc.userRepo.Create(ctx, user); err != nil {
