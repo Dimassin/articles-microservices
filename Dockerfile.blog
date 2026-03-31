@@ -1,0 +1,36 @@
+FROM golang:1.25-alpine AS builder
+
+WORKDIR /app
+
+# Устанавливаем migrate с драйвером postgres
+RUN go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
+
+# Копируем proto
+COPY proto ./proto
+
+# Копируем go.mod и go.sum
+COPY services/blog/go.mod services/blog/go.sum ./
+
+# Правим replace
+RUN sed -i 's|../../proto/auth|/app/proto/auth|g' go.mod
+
+RUN go mod download
+
+COPY services/blog ./services/blog
+COPY services/blog/migrations ./migrations
+
+WORKDIR /app/services/blog
+RUN go build -o /blog-server ./cmd/api/main.go
+
+FROM alpine:latest
+
+RUN apk --no-cache add ca-certificates postgresql-client
+COPY --from=builder /go/bin/migrate /usr/local/bin/migrate
+
+WORKDIR /root/
+COPY --from=builder /blog-server .
+COPY --from=builder /app/migrations ./migrations
+
+EXPOSE 8081
+
+CMD ["sh", "-c", "migrate -database 'postgres://postgres:postgres@postgres/blog?sslmode=disable' -path ./migrations up && ./blog-server"]

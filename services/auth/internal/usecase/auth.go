@@ -5,13 +5,15 @@ import (
 	"auth/internal/ports"
 	"context"
 	"log"
+	"time"
 )
 
 type AuthUsecase struct {
-	userRepo       ports.UserRepository
-	tokenMgr       ports.TokenManager
-	hasher         ports.PasswordHasher
-	eventPublisher ports.EventPublisher
+	userRepo         ports.UserRepository
+	tokenMgr         ports.TokenManager
+	hasher           ports.PasswordHasher
+	eventPublisher   ports.EventPublisher
+	refreshTokenRepo ports.RefreshTokenRepository
 }
 
 func NewAuthUsecase(
@@ -19,12 +21,14 @@ func NewAuthUsecase(
 	tokenMgr ports.TokenManager,
 	hasher ports.PasswordHasher,
 	eventPublisher ports.EventPublisher,
+	refreshTokenRepo ports.RefreshTokenRepository,
 ) *AuthUsecase {
 	return &AuthUsecase{
-		userRepo:       userRepo,
-		tokenMgr:       tokenMgr,
-		hasher:         hasher,
-		eventPublisher: eventPublisher,
+		userRepo:         userRepo,
+		tokenMgr:         tokenMgr,
+		hasher:           hasher,
+		eventPublisher:   eventPublisher,
+		refreshTokenRepo: refreshTokenRepo,
 	}
 }
 
@@ -74,6 +78,12 @@ func (uc *AuthUsecase) Register(ctx context.Context, req *domain.RegisterRequest
 		return nil, err
 	}
 
+	refreshTokenTTL := 720 * time.Hour
+	expiresAt := time.Now().Add(refreshTokenTTL)
+	if err := uc.refreshTokenRepo.Create(ctx, user.ID, refreshToken, expiresAt); err != nil {
+		log.Printf("Failed to save refresh token: %v", err)
+	}
+
 	// 6. Возвращаем ответ
 	return &domain.AuthResponse{
 		AccessToken:  accessToken,
@@ -108,6 +118,12 @@ func (uc *AuthUsecase) Login(ctx context.Context, req *domain.LoginRequest) (*do
 		return nil, domain.ErrInternalServer
 	}
 
+	refreshTokenTTL := 720 * time.Hour
+	expiresAt := time.Now().Add(refreshTokenTTL)
+	if err := uc.refreshTokenRepo.Create(ctx, user.ID, refreshToken, expiresAt); err != nil {
+		log.Printf("Failed to save refresh token: %v", err)
+	}
+
 	// 4. Возвращаем ответ
 	return &domain.AuthResponse{
 		AccessToken:  accessToken,
@@ -126,4 +142,44 @@ func (uc *AuthUsecase) ValidateToken(ctx context.Context, token string) (*domain
 	}
 
 	return claims, nil
+}
+
+func (uc *AuthUsecase) Refresh(ctx context.Context, refreshToken string) (*domain.AuthResponse, error) {
+	userID, err := uc.refreshTokenRepo.FindByToken(ctx, refreshToken)
+	if err != nil {
+		return nil, domain.ErrInvalidToken
+	}
+
+	user, err := uc.userRepo.FindByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	newAccessToken, err := uc.tokenMgr.GenerateAccessToken(ctx, user)
+	if err != nil {
+		return nil, domain.ErrInternalServer
+	}
+
+	newRefreshToken, err := uc.tokenMgr.GenerateRefreshToken(ctx, user)
+	if err != nil {
+		return nil, domain.ErrInternalServer
+	}
+
+	refreshTokenTTL := 720 * time.Hour
+	expiresAt := time.Now().Add(refreshTokenTTL)
+	if err := uc.refreshTokenRepo.Create(ctx, user.ID, newRefreshToken, expiresAt); err != nil {
+		return nil, domain.ErrInternalServer
+	}
+
+	if err := uc.refreshTokenRepo.Revoke(ctx, refreshToken); err != nil {
+		log.Printf("Failed to revoke old refresh token: %v", err)
+	}
+
+	return &domain.AuthResponse{
+		AccessToken:  newAccessToken,
+		RefreshToken: newRefreshToken,
+		UserID:       user.ID,
+		Email:        user.Email,
+		Username:     user.Username,
+	}, nil
 }

@@ -12,6 +12,7 @@ func SetupRouter(authHandler *handler.AuthHandler) http.Handler {
 	mux.HandleFunc("POST /api/register", authHandler.Register)
 	mux.HandleFunc("POST /api/login", authHandler.Login)
 	mux.HandleFunc("POST /api/validate", authHandler.Validate)
+	mux.HandleFunc("POST /api/refresh", authHandler.Refresh)
 
 	return mux
 }
