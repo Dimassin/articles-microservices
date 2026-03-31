@@ -34,5 +34,61 @@ services:
     ports:
       - "9092:9092"
 
+  auth:
+    build:
+      context: .
+      dockerfile: Dockerfile.auth
+    container_name: auth-service
+    command: sh -c "migrate -database 'postgres://postgres:postgres@postgres/auth?sslmode=disable' -path ./migrations up && ./auth-server"
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: auth
+      DB_SSLMODE: disable
+      JWT_SECRET: your-secret-key-change-in-production
+      KAFKA_BROKERS: kafka:9092
+      KAFKA_TOPIC: user-events
+    ports:
+      - "8080:8080"
+      - "50051:50051"
+    depends_on:
+      - postgres
+      - kafka
+
+  blog:
+    build:
+      context: .
+      dockerfile: Dockerfile.blog
+    container_name: blog-service
+    command: sh -c "migrate -database 'postgres://postgres:postgres@postgres/blog?sslmode=disable' -path ./migrations up && ./blog-server"
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: blog
+      DB_SSLMODE: disable
+      JWT_SECRET: your-secret-key-change-in-production
+      AUTH_GRPC_ADDR: auth:50051
+    ports:
+      - "8081:8081"
+    depends_on:
+      - postgres
+      - auth
+
+  notification:
+    build:
+      context: .
+      dockerfile: Dockerfile.notification
+    container_name: notification-service
+    environment:
+      KAFKA_BROKERS: kafka:9092  # ← вместо localhost:9092
+      KAFKA_TOPIC: user-events
+      KAFKA_GROUP_ID: notification-group
+    depends_on:
+      - kafka
+
 volumes:
   postgres_data:

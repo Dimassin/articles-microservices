@@ -17,4 +17,4 @@ require (
 	google.golang.org/protobuf v1.36.10 // indirect
 )
 
-replace github.com/Dimassin/articles-microservices/proto/auth => ../../proto/auth
+replace github.com/Dimassin/articles-microservices/proto/auth => /app/proto/auth
